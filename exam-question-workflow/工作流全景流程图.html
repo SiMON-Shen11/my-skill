@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>试卷/教材 OCR 切题工作流全景（优化版）</title>
+<style>
+  :root{
+    --bg:#F4F3EE; --card:#FFFFFF; --border:#E4E3DD; --text:#1A1B1C; --sub:#6B7280;
+    --blue:#9BBBF4; --cyan:#A3D5E8; --green:#94D8C3; --amber:#F4B393; --violet:#C9A7E8; --neutral:#9EACEA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'PingFang SC','Microsoft YaHei','Segoe UI',Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;font-size:14px;padding:24px 12px 48px;}
+  .wrap{max-width:980px;margin:0 auto;}
+  .page-title{text-align:center;padding:8px 0 4px;}
+  .page-title h1{font-size:22px;font-weight:600;}
+  .page-title p{color:var(--sub);font-size:13px;margin-top:4px;}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin:14px 0 6px;font-size:12px;color:var(--sub);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block;}
+
+  .flow{position:relative;padding-left:0;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,0.03);}
+  .card .tag{display:inline-block;font-size:11px;font-weight:700;color:#fff;border-radius:20px;padding:2px 10px;margin-right:8px;vertical-align:2px;}
+  .card h2{display:inline;font-size:15px;font-weight:600;}
+  .card .desc{margin-top:6px;color:#3a3d44;font-size:13.5px;}
+  .card .prod{margin-top:6px;font-size:12px;color:var(--sub);}
+  .card .prod b{color:#374151;font-family:Consolas,Menlo,monospace;font-weight:600;}
+  .arrow{text-align:center;color:var(--neutral);font-size:16px;line-height:1;padding:2px 0;}
+
+  .tag-blue{background:var(--blue);}
+  .tag-cyan{background:var(--cyan);color:#1f3a46;}
+  .tag-green{background:var(--green);color:#1a3a30;}
+  .tag-amber{background:var(--amber);color:#4a2c14;}
+  .tag-violet{background:var(--violet);color:#3a2a4a;}
+  .tag-neutral{background:var(--neutral);color:#262a4a;}
+
+  /* OCR 智能分流决策树 */
+  .ocr-tree{background:linear-gradient(135deg,rgba(163,213,232,0.12),rgba(155,187,244,0.14));border:1px solid var(--cyan);border-radius:14px;padding:16px;margin:12px 0;}
+  .ocr-tree .ot-title{font-weight:700;font-size:14px;margin-bottom:10px;}
+  .branch{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;}
+  .node{flex:1 1 200px;min-width:0;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;}
+  .node .cond{font-weight:700;font-size:12.5px;margin-bottom:3px;}
+  .node .act{color:#374151;}
+  .node .badge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:20px;padding:1px 8px;margin-top:5px;}
+  .ok{background:#94D8C3;color:#1a3a30;}
+  .mid{background:#F4B393;color:#4a2c14;}
+  .nogo{background:#C9A7E8;color:#3a2a4a;}
+  .arrow-h{text-align:center;color:var(--neutral);font-size:12px;line-height:1;padding:3px 0;}
+  .arrow-h::before{content:"▼";display:block;}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px;}
+  th,td{border:1px solid var(--border);padding:6px 8px;text-align:left;}
+  th{background:#f0f1f6;font-weight:600;}
+  td.mono{font-family:Consolas,Menlo,monospace;font-size:12px;}
+  .foot{text-align:center;color:var(--sub);font-size:12px;margin-top:20px;}
+  @media (max-width:560px){ body{padding:16px 6px 40px;} .card{padding:12px 12px;} .node{flex:1 1 100%;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-title">
+    <h1>试卷/教材 OCR 切题工作流全景（优化版）</h1>
+    <p>run_workflow.py 端到端 · 第②步 OCR 已升级为「GPU 优先」智能分流 · 产物：output/questions（平铺）+ output_hier（按题型/层级命名）</p>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#9BBBF4;"></i>主流程阶段</span>
+    <span><i class="dot" style="background:#A3D5E8;"></i>OCR 智能分流</span>
+    <span><i class="dot" style="background:#F4B393;"></i>Agent 联动/备选</span>
+    <span><i class="dot" style="background:#94D8C3;"></i>最终交付</span>
+  </div>
+
+  <!-- ① 输入 -->
+  <div class="card">
+    <span class="tag tag-neutral">① 输入</span><h2>上传 PDF + 附加信息</h2>
+    <div class="desc">试卷 PDF 或电子版教材（扫描件 / 文字层均可）。通过附加信息提升识别准确率：<b>--kind textbook|exam</b>（教材启用层级识别 / 试卷只按题型）、<b>--subject 数学</b>（学科提示）、<b>--toc-page 目录页码</b>、<b>--ocr-backend auto</b>（默认，自动智能分流）。</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 1/7 -->
+  <div class="card">
+    <span class="tag tag-blue">1/7</span><h2>PDF 渲染（pdf_render.py）</h2>
+    <div class="desc">用 PyMuPDF 把每一页渲染成高清 PNG（默认 200 DPI），供 OCR 与切割使用。</div>
+    <div class="prod">▶ 产物：<b>pages/page_01.png … page_NN.png</b></div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 2/7 OCR 新逻辑 -->
+  <div class="ocr-tree">
+    <div class="ot-title">2/7 OCR 文字识别 —— 智能分流（本轮升级）</div>
+    <div class="branch">
+      <div class="node">
+        <div class="cond">① 检测 GPU</div>
+        <div class="act">paddle 已编译 CUDA + 存在 CUDA 设备 + 能实际跑通张量运算</div>
+        <span class="badge ok">GPU 正常</span>
+      </div>
+      <div class="node">
+        <div class="cond">② 探测文字层</div>
+        <div class="act">无 GPU / GPU 不可用时，检测 PDF 是否有文字层（&gt;50 字符）</div>
+        <span class="badge mid">有文字层</span>
+      </div>
+      <div class="node">
+        <div class="cond">③ CPU PaddleOCR</div>
+        <div class="act">无 GPU 且无文字层时，尝试 CPU 端 PaddleOCR（禁 oneDNN）</div>
+        <span class="badge mid">仅 CPU</span>
+      </div>
+      <div class="node">
+        <div class="cond">④ Agent 视觉识别（备选）</div>
+        <div class="act">CPU Paddle 也未安装时，改用 Agent 视觉 OCR（生成提示词→逐页识别→回填）</div>
+        <span class="badge nogo">兜底</span>
+      </div>
+    </div>
+    <div class="arrow-h"></div>
+    <div class="branch">
+      <div class="node" style="border-color:#94D8C3;">
+        <div class="cond">→ PaddleOCR / GPU</div>
+        <div class="act">PP-OCRv6 跑在 GPU，扫描件/公式/图形也能识别，20 页约 35 秒</div>
+        <span class="badge ok">默认首选</span>
+      </div>
+      <div class="node">
+        <div class="cond">→ 文字层提取</div>
+        <div class="act">pdf_text_ocr.py 直接提取文本块 + 坐标 + 字号 + 字体（最快最准）</div>
+      </div>
+      <div class="node">
+        <div class="cond">→ CPU PaddleOCR</div>
+        <div class="act">同引擎跑 CPU，速度较慢但可用</div>
+      </div>
+      <div class="node">
+        <div class="cond">→ Agent 视觉 OCR</div>
+        <div class="act">生成提示词 → Agent 看图出结构化 JSON → 继续后续流程</div>
+      </div>
+    </div>
+    <div class="prod" style="margin-top:8px;font-size:12px;color:var(--sub);">▶ 统一产物：<b>ocr/ocr_page_01.json …</b>（每页文本块 + 坐标 + 候选题型）。显式指定 <b>--ocr-backend paddle / textlayer / agent / pixel / precomputed</b> 时走对应模式，不经智能分流。</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 3/7 -->
+  <div class="card">
+    <span class="tag tag-blue">3/7</span><h2>目录解析 → 层级树（仅教材，toc_parser.py）</h2>
+    <div class="desc">解析教材目录页，建立「第X章 → 第X节 → 第X小节 → 第X课时」层级树；目录页自动加入跳过页，不切题。试卷模式跳过。</div>
+    <div class="prod">▶ 产物：<b>tree.json</b>（层级树 + 目录页码）</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 4/7 -->
+  <div class="card">
+    <span class="tag tag-blue">4/7</span><h2>版面分析（layout_analysis.py）—— 核心步骤</h2>
+    <div class="desc">从 OCR 识别<b>大题标题</b>（期末打卡 DAY N / 第X部分 / 教材层级标题）、<b>题号</b>、<b>页脚</b>，逐题切定「题号→下一题」范围，并对每题做<b>题型判定</b>（按老师锁定标准，<b>执行级短路</b>：每步命中即返回，不再执行后续判断）：</div>
+    <div class="desc" style="margin-top:8px;">
+      <div style="background:rgba(201,167,232,0.12);border:1px solid var(--violet);border-radius:8px;padding:8px 12px;font-size:12.5px;line-height:1.7;margin-bottom:8px;">
+        <b>🔲 表格页检测（前置分支）</b>：页面同时存在「类型一/二/三」分类标签（左栏）+「教材变式/母题」（右栏）→ 判定为镶嵌多个题目的大表格页 → <b>跳过常规题号检测</b>，将 section 标题 + 整个表格作为<b>一道解答题</b>整体切割（标记 is_table，跳过跨页判定）。<br>
+        <span style="color:#6B7280;">解决：左栏"1.2.3."类型子问被误识别为题号、右栏"【教材变式N】"格式不匹配题号正则被漏检。</span>
+      </div>
+      <div style="background:#f0f1f6;border-radius:8px;padding:8px 12px;font-size:12.5px;line-height:1.8;">
+        <b>① 选择题</b>：只检测选项行（A./B./C./D. 或 (A)(B)(C)(D)）→ 命中即<b>返回选择题</b>，<span style="color:#b45309;">跳过像素横线检测与解答判断</span><br>
+        <span style="color:#9CA3AF;">　　↓ 未命中</span><br>
+        <b>② 填空题</b>：<span style="color:#059669;">只看横线，不涉及解答关键词/问号</span> → 有子问则每个子问都有横线（像素检测起始不侵入上一行文字），或无子问题后有 ____ 横线（OCR 或像素检测）→ 命中即<b>返回填空题</b>，<span style="color:#b45309;">跳过解答判断</span>（即使有"求/计算/证明/问号"也判填空）<br>
+        <span style="color:#9CA3AF;">　　像素横线防误判</span>：横线上方0-3px有笔画（文字底横）或左右6px内有笔画（汉字"一"）→ 排除，不误判为填空横线<br>
+        <span style="color:#9CA3AF;">　　↓ 未命中</span><br>
+        <b>③ 解答题</b>：<span style="color:#059669;">无横线时才用解答特征判断</span>（此时才计算关键词/问号，执行级短路）→ 有子问(非全横线) / 命中 求/证明/计算… 关键词 / 以？结尾 → <b>返回解答题</b><br>
+        <span style="color:#9CA3AF;">　　↓ 未命中</span><br>
+        <b>④ 未分类</b> → 进 pending（交 Agent 视觉判断）
+      </div>
+    </div>
+    <div class="desc" style="margin-top:6px;">含跨页处理：末题内容底距页底&lt;400 且下页首题 y&gt;200 → 合并下页顶部一起判定（选项在下一页的选择题不再误判）。</div>
+    <div class="prod">▶ 产物：<b>markers.json</b>（大题/题号/页脚标记 + 每题题型 + 未分类 pending 列表）</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 5/7 -->
+  <div class="card">
+    <span class="tag tag-blue">5/7</span><h2>图形边界检测（figure_detection.py）</h2>
+    <div class="desc">通过「图N」标题定位图形位置，形态学闭运算连接图中分散点线，得到图形真实边界（保证几何图 / 坐标系切图时不被切掉）。</div>
+    <div class="prod">▶ 产物：<b>figures.json</b>（各图形边界框）</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 6/7 -->
+  <div class="card">
+    <span class="tag tag-blue">6/7</span><h2>题目切分（crop.py）—— 完整性优先</h2>
+    <div class="desc">按 markers + figures 把每题切成长条图，核心原则：<b>宁可相邻题在图形/分式区域重叠，也不让任何一题自身内容被截断</b>。</div>
+    <table style="margin-top:8px;width:100%;border-collapse:collapse;font-size:12.5px;">
+      <tr style="background:rgba(155,187,244,0.1);"><th style="text-align:left;padding:5px 8px;border:1px solid var(--border);width:70px;">边界</th><th style="text-align:left;padding:5px 8px;border:1px solid var(--border);">规则（按优先级）</th><th style="text-align:left;padding:5px 8px;border:1px solid var(--border);width:180px;">修复的问题</th></tr>
+      <tr><td style="padding:5px 8px;border:1px solid var(--border);font-weight:700;">上边界</td><td style="padding:5px 8px;border:1px solid var(--border);">① 题号−28px → ② 有图形则延伸到图形顶−10px → ③ 不侵入上一大题标题 → ④ 不低于上一题下边界 → ⑤ <b>题号上方80px内有OCR内容（行列式首行/分式分子）→ 扩展到内容顶−8px</b></td><td style="padding:5px 8px;border:1px solid var(--border);">行列式首行/分式分子在题号上方被裁</td></tr>
+      <tr><td style="padding:5px 8px;border:1px solid var(--border);font-weight:700;">下边界</td><td style="padding:5px 8px;border:1px solid var(--border);">① 内容底+50px → ② 夹紧到下一题题号−2px → ③ 不越过大题标题/页脚 → ④ <b>下一题内容向上延伸（大括号/分子比题号高）→ 夹紧到下一题内容顶−2px</b> → ⑤ <b>本题含分式且分母在下一题题号下方 → 取max，最多延伸50px</b></td><td style="padding:5px 8px;border:1px solid var(--border);">方程组分子被截断混入上一题；分式分母被下一题题号裁掉</td></tr>
+      <tr><td style="padding:5px 8px;border:1px solid var(--border);font-weight:700;">左右</td><td style="padding:5px 8px;border:1px solid var(--border);">默认/auto-margin边界 ∪ 本页OCR文本实际范围，各加10-15px留白</td><td style="padding:5px 8px;border:1px solid var(--border);">宽版心左右边缘字符被裁</td></tr>
+      <tr><td style="padding:5px 8px;border:1px solid var(--border);font-weight:700;">跨页</td><td style="padding:5px 8px;border:1px solid var(--border);">末题内容底&gt;页高−400px 且 下页首题y&gt;200px → 上页题号到页底 + 下页页顶到下一题题号前，垂直拼接</td><td style="padding:5px 8px;border:1px solid var(--border);">跨页题题干/选项被分到两页</td></tr>
+    </table>
+    <div class="prod" style="margin-top:8px;">▶ 分式检测：垂直堆叠的分子/分母OCR块对（间距−2~14px、x重叠&gt;4px、单块宽&lt;150px）→ 自动扩展上下边界；▶ 产物：<b>output/questions/{选择题,填空题,解答题}/ + meta.json</b></div>
+  </div>
+
+  <!-- 6.5 -->
+  <div class="card" style="border-color:#F4B393;background:rgba(244,179,147,0.06);">
+    <span class="tag tag-amber">6.5</span><h2>Agent 联动（未分类题看图判定）</h2>
+    <div class="desc">若存在未分类题：导出切图到 <b>output/pending/</b> + 清单 <b>pending_questions.json</b> → 暂停 → 你看图 / Agent 视觉判断题型 → 填写 <b>pending_types.json</b> → 用 --pending-types 重跑，回填 markers.json 后再进第 7 步。</div>
+    <div class="prod">▶ 循环：导出待判图 → 判定 → 回填重跑（期末打卡 101 题仅 1 题走此路径，其余自动判定）</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- 7/7 -->
+  <div class="card">
+    <span class="tag tag-blue">7/7</span><h2>层级命名 + 归档（hierarchy_tracker.py + naming.py）</h2>
+    <div class="desc">教材：按 tree.json 层级状态机给每题定位到「第X章/第X节/…/题型」；试卷：仅按题型归档。统一命名复制到 output_hier。</div>
+    <div class="prod">▶ 产物：<b>output_hier/选择题/选择题_第01题.png</b> … + <b>final_meta.json</b>（题号 ↔ 图片路径映射）</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <!-- ⑧ 输出 -->
+  <div class="card" style="border-color:#94D8C3;background:rgba(148,216,195,0.08);">
+    <span class="tag tag-green">⑧ 交付</span><h2>最终产物</h2>
+    <div class="desc">图片按题型 / 层级命名存入文件夹，可直接用于组卷、错题本、在线题库录入。</div>
+    <table>
+      <tr><th>目录</th><th>内容</th></tr>
+      <tr><td class="mono">output/questions/{选择题,填空题,解答题}/</td><td>平铺切图（打卡册 dayX_qNN / 标准卷 qNNN）</td></tr>
+      <tr><td class="mono">output_hier/{题型}/第NN题.png</td><td>按题型命名的最终归档（教材含章/节/课时层级）</td></tr>
+      <tr><td class="mono">markers.json / meta.json / final_meta.json</td><td>全量可追溯元数据（题号 ↔ 坐标 ↔ 题型 ↔ 图片）</td></tr>
+      <tr><td class="mono">output/pending/ + pending_types.json</td><td>未分类题的待判定切图与回填结果（仅当有 pending）</td></tr>
+    </table>
+  </div>
+
+  <div class="foot">工作区：D:\skillDiy\exam-question-workflow · 期末打卡：101题（选择49/填空40/解答12，跨页7）· 教材勤学早九上：391题（选择77/填空184/解答130，含19页表格整表合并，跨页27）· GPU RTX3050</div>
+</div>
+</body>
+</html>
