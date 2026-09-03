@@ -5,6 +5,38 @@
 > **本测试版**在 `D:\skillDiy\exam-question-workflow`（可自由迭代）。
 > **运行环境**：本工作区自带独立 Python 虚拟环境 `.venv`（含 PaddleOCR），与系统环境隔离。
 
+## 零、克隆本仓库后如何运行（必读）
+
+> 本仓库**只包含工作流的代码与文档**。为控制体积、规避 GitHub 单文件 100MB 限制，
+> 以下两项**未随仓库发布**，需自行准备：
+
+| 缺失项 | 体积 | 说明 | 准备方式 |
+| --- | --- | --- | --- |
+| `.venv/`（Python 虚拟环境） | 约 4.4GB | 含 PaddleOCR / PyMuPDF / OpenCV 等依赖 | 用本仓库 `requirements.txt` 重建（见下方步骤） |
+| `samples/`（样例 + 真实材料） | 约 448MB（含 128MB PDF） | 第三章快速开始里引用的示例 PDF | **自备任意试卷 / 教材 PDF**，把路径传给 `run_workflow.bat` 即可 |
+
+### 从零运行步骤（Windows）
+
+```bat
+:: 1) 在 exam-question-workflow/ 目录下创建隔离虚拟环境
+python -m venv .venv
+
+:: 2) 安装依赖（requirements.txt 已锁定版本，见仓库根）
+.venv\Scripts\python -m pip install -r requirements.txt
+
+:: 3) （可选，GPU 加速）本机有 NVIDIA 显卡时，把 paddlepaddle 换成 GPU 版:
+.venv\Scripts\python -m pip uninstall -y paddlepaddle
+.venv\Scripts\python -m pip install paddlepaddle-gpu==3.3.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+
+:: 4) 用自己的 PDF 跑（samples/ 不在仓库里，用你自己的文件路径）:
+run_workflow.bat "你的试卷.pdf" --kind exam
+run_workflow.bat "你的教材.pdf" --kind textbook --toc-page 5 --chapter 25 --subject 数学
+```
+
+> - `run_workflow.bat` 通过 `%~dp0.venv\Scripts\python.exe` 调用本目录虚拟环境，**与克隆位置无关**；`.venv` 未创建时会明确报错并提示安装命令。
+> - CPU 与 GPU 产物完全一致，无 GPU 也能跑（仅速度差异，详见第六章实测）。
+> - `samples/` 内的 `make_sample.py`（合成测试教材生成器）未随仓库发布；如想零素材自测，自备一张试卷 PDF 即可走通全流程。
+
 ## 一、目录结构
 
 ```
@@ -104,9 +136,11 @@ D:\skillDiy\exam-question-workflow\
 
 ## 三、快速开始
 
+> 以下示例假设本地存在 `samples/` 目录。**本仓库未包含 `samples/`**，请将示例中的 `samples\xxx.pdf` 替换为你自己的 PDF 路径（或从第零章的"从零运行步骤"复制命令）。
+
 ```bat
 :: 推荐: 用启动器(自动用 .venv 运行), 在当前目录执行:
-run_workflow.bat samples\2026年4月广州市初三一模数学试卷.pdf --kind exam
+run_workflow.bat "你的试卷.pdf" --kind exam
 
 :: 扫描版教材(如勤学早): 自动 PaddleOCR, --toc-page 指定目录页(中位页码即可, 自动扩窗5页)
 run_workflow.bat "samples\勤学早 同步课时导练 数学九年级上 RJ版 上册.pdf" --kind textbook --toc-page 5 --chapter 25 --subject 数学
@@ -178,10 +212,10 @@ run_workflow.bat 教材.pdf --kind textbook --flat
 本机已装 **GPU 版**（paddlepaddle-gpu 3.3.1，cu118，支持 RTX 3050）：
 
 - 因 Windows 长路径限制（modelscope 目录层级过深超过 260 字符），**不能装到系统 Python**，
-  需装在短路径虚拟环境。创建命令（已执行）：
+  需装在短路径虚拟环境。仓库已提供 `requirements.txt`（版本已锁定），直接安装即可：
   ```
-  python -m venv D:\skillDiy\exam-question-workflow\.venv
-  D:\skillDiy\exam-question-workflow\.venv\Scripts\python -m pip install pymupdf opencv-contrib-python numpy paddleocr
+  python -m venv .venv
+  .venv\Scripts\python -m pip install -r requirements.txt
   ```
 - **GPU 版安装**（已执行，约 2.4GB，含 CUDA 运行时）：
   ```
@@ -194,7 +228,7 @@ run_workflow.bat 教材.pdf --kind textbook --flat
     → 应输出 `True 1`（GPU 生效）
 - 已装：paddleocr 3.7.0（PP-OCRv6 模型，首次运行自动下载约 140MB 到 `C:\Users\<用户>\.paddlex\official_models\`）
 - 注意：**不要**同时安装 `opencv-python`（会与 paddleocr 依赖的 `opencv-contrib-python` 冲突损坏 cv2），只用 `opencv-contrib-python`
-- 若在别的电脑重装：直接复制 `.venv` 目录即可（或按上面命令重装）
+- 若在别的电脑重装：按上面命令 `pip install -r requirements.txt` 重建 `.venv` 即可（直接复制 `.venv` 目录也行，但跨机不保证可用）
 
 ### GPU 提速实测（本机 RTX 3050）
 

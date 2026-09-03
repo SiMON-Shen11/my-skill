@@ -26,9 +26,11 @@
 | `output/` | 运行产物目录 |
 | `__pycache__/`、`*.pyc`、`*.bak` | 编译缓存与备份文件 |
 
-克隆后如需本地运行，需自行 `pip install` 依赖并准备样例数据。
+克隆后如需本地运行：
+- `exam-question-workflow/` 已提供锁定版本的 `requirements.txt`，`python -m venv .venv` 后 `pip install -r requirements.txt` 即可重建依赖；
+- `samples/` 未入库，请**自备任意试卷 / 教材 PDF** 传给 `run_workflow.bat`（详见该目录内 `README.md` 第零章「克隆本仓库后如何运行」）。
 
 ## 使用方式
 
 - **Skill**：将对应文件夹复制到 WorkBuddy 的 skills 目录（用户级 `~/.workbuddy/skills/` 或项目级 `.workbuddy/skills/`）。
-- **工作流**：进入 `exam-question-workflow`，参考其内部 `README.md` 与 `run_workflow.bat`。
+- **工作流**：进入 `exam-question-workflow`，先按 `requirements.txt` 装好依赖（`.venv` 需自建，仓库未含），再参考其内部 `README.md` 第零章用自备 PDF 运行。

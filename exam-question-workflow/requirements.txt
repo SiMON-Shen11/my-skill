@@ -1,0 +1,19 @@
+# 试卷 / 教材 OCR 切题工作流 - Python 依赖（版本已锁定，2026-09 实测可运行）
+#
+# 安装步骤（在 exam-question-workflow/ 目录下）:
+#   python -m venv .venv
+#   .venv\Scripts\python -m pip install -r requirements.txt
+#
+# 默认安装 CPU 版 paddlepaddle（由 paddleocr 依赖自动拉取）。
+# 若有 NVIDIA 显卡需 GPU 加速，安装后把 paddlepaddle 换成 GPU 版:
+#   .venv\Scripts\python -m pip uninstall -y paddlepaddle
+#   .venv\Scripts\python -m pip install paddlepaddle-gpu==3.3.1 \
+#       -i https://www.paddlepaddle.org.cn/packages/stable/cu118/
+# （GPU 版 wheel 自带 CUDA 11.8 运行时，驱动 >= 450 即可；详见 README 第六章）
+
+numpy==2.3.5
+opencv-contrib-python==4.10.0.84
+pymupdf==1.28.2
+pillow==12.3.0
+shapely==2.1.2
+paddleocr==3.7.0
